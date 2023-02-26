@@ -34,6 +34,7 @@ impl OutputAccumulater {
     }
 
     // take_body extract messages. After call, OutputAccumulater has empty body
+    #[allow(dead_code)]
     pub fn take_body(&mut self) -> Vec<String> {
         std::mem::take(&mut self.body)
     }

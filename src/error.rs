@@ -1,4 +1,3 @@
-use bincode::error::{DecodeError, EncodeError};
 use notify_rust::error::Error as NotifyRustError;
 use reqwest::Error as RequestError;
 use serde_json::error::Error as SerdeJsonError;
@@ -10,6 +9,7 @@ pub type NotifyResult = result::Result<(), NotificationError>;
 enum PomodoroError {
     NotificationError,
     ConfigurationError,
+    #[cfg(unix)]
     UdsHandlerError,
     UserInputHandlerError,
     ParseError,
@@ -97,14 +97,16 @@ impl std::error::Error for ConfigurationError {
 }
 
 #[derive(Debug)]
+#[cfg(unix)]
 pub enum UdsHandlerError {
     NoSubcommand,
     ParseError(ParseError),
     SocketError(std::io::Error),
-    EncodeFailed(EncodeError),
-    DecodeFailed(DecodeError),
+    EncodeFailed(bincode::error::EncodeError),
+    DecodeFailed(bincode::error::DecodeError),
 }
 
+#[cfg(unix)]
 impl fmt::Display for UdsHandlerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -117,6 +119,7 @@ impl fmt::Display for UdsHandlerError {
     }
 }
 
+#[cfg(unix)]
 impl std::error::Error for UdsHandlerError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {

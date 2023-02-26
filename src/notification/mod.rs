@@ -329,7 +329,7 @@ mod tests {
                 Value::Timestamp(naive_date_time + Duration::minutes(30)),
             ];
 
-            Notification::convert_to_notification(row)
+            Notification::convert_to_notification(row.into())
         };
 
         let test_cases = vec![

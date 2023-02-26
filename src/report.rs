@@ -49,7 +49,7 @@ pub fn generate_configuration_report(
             .update_reason(&ConfigurationError::SlackConfigNotFound),
     };
 
-    let slack_token_message = match config.get_slack_channel() {
+    let slack_token_message = match config.get_slack_token() {
         Some(_) => Report::new("O", "slack_token"),
         None => {
             Report::new("X", "slack_token").update_reason(&ConfigurationError::SlackConfigNotFound)

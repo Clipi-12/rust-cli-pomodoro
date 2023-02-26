@@ -1,4 +1,4 @@
-use clap::{Arg, ArgMatches, Command};
+use clap::{Arg, Command};
 use std::sync::Arc;
 
 use crate::command::action::ActionType;
@@ -23,7 +23,8 @@ pub const DEFAULT_BREAK_TIME: u16 = 5;
 
 pub enum CommandType {
     StartUp(Arc<Configuration>),
-    UdsClient(ArgMatches),
+    #[cfg(unix)]
+    UdsClient(clap::ArgMatches),
 }
 
 pub fn get_start_and_uds_client_command() -> Command<'static> {

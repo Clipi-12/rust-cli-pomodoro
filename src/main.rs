@@ -4,8 +4,10 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::io::{self};
 use std::sync::{Arc, Mutex};
+#[cfg(unix)]
+use tokio::net::UnixDatagram;
+use tokio::sync::mpsc;
 use tokio::time::sleep;
-use tokio::{net::UnixDatagram, sync::mpsc};
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
 
 mod command;
@@ -14,23 +16,19 @@ mod notification;
 use database as db;
 mod configuration;
 mod error;
+#[cfg(unix)]
 mod ipc;
 mod logging;
 mod report;
 
+use crate::command::*;
+use crate::configuration::{get_configuration, Configuration};
 use crate::error::ConfigurationError;
-use crate::ipc::{create_client_uds, create_server_uds, Bincodec, MessageRequest, MessageResponse};
+#[cfg(unix)]
+use crate::ipc::*;
 use crate::notification::archived_notification;
 use crate::notification::notify::{notify_break, notify_work};
 use crate::notification::Notification;
-use crate::{
-    command::{handler, util, CommandType},
-    ipc::{get_uds_address, UdsType},
-};
-use crate::{
-    configuration::{get_configuration, Configuration},
-    ipc::UdsMessage,
-};
 
 #[macro_use]
 extern crate log;
@@ -50,6 +48,7 @@ struct UserInput {
 #[derive(Debug)]
 enum InputSource {
     StandardInput,
+    #[cfg(unix)]
     UnixDomainSocket,
 }
 
@@ -75,15 +74,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let stdinput_handle = spawn_stdinput_handler(stdin_tx);
 
             // handle uds
-            let uds_input_tx = user_input_tx.clone();
-
-            let server_uds_option = create_server_uds().await.unwrap();
-            let server_tx = match server_uds_option {
+            #[cfg(unix)]
+            let server_tx = match create_server_uds().await.unwrap() {
                 Some(uds) => {
                     let server_uds = Arc::new(uds);
                     let (server_rx, server_tx) = (server_uds.clone(), server_uds.clone());
                     let uds_input_handle =
-                        spawn_uds_input_handler(uds_input_tx, server_tx, server_rx);
+                        spawn_uds_input_handler(user_input_tx.clone(), server_tx, server_rx);
 
                     Some(server_uds)
                 }
@@ -101,8 +98,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 match handler::user_input::handle(input, &mut id_manager, &hash_map, &glue, &config)
                     .await
                 {
+                    #[allow(unused_mut)]
+                    #[allow(unused_variables)]
                     Ok(mut output) => match user_input.source {
                         InputSource::StandardInput => {}
+                        #[cfg(unix)]
                         InputSource::UnixDomainSocket => {
                             if let Some(ref server_tx) = server_tx {
                                 let client_addr = get_uds_address(UdsType::Client);
@@ -122,6 +122,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                         match user_input.source {
                             InputSource::StandardInput => {}
+                            #[cfg(unix)]
                             InputSource::UnixDomainSocket => {
                                 if let Some(ref server_tx) = server_tx {
                                     let client_addr = get_uds_address(UdsType::Client);
@@ -146,6 +147,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 util::print_start_up();
             }
         }
+        #[cfg(unix)]
         CommandType::UdsClient(matches) => {
             debug!("CommandType::UdsClient");
             let socket = create_client_uds().await?;
@@ -163,9 +165,17 @@ async fn detect_command_type() -> Result<CommandType, ConfigurationError> {
     let matches = command::get_start_and_uds_client_command().get_matches();
     debug!("handle_uds_client_command, matches: {:?}", &matches);
 
-    let command_type = match (&matches).subcommand().is_none() {
-        true => CommandType::StartUp(get_configuration(&matches)?),
-        false => CommandType::UdsClient(matches),
+    let command_type = if (&matches).subcommand().is_none() {
+        CommandType::StartUp(get_configuration(&matches)?)
+    } else {
+        {
+            #[cfg(unix)]
+            CommandType::UdsClient(matches)
+        }
+        {
+            #[cfg(not(unix))]
+            panic!("Cannot start UDS Client if not using Unix")
+        }
     };
 
     Ok(command_type)
@@ -250,6 +260,7 @@ fn spawn_stdinput_handler(tx: Sender<UserInput>) -> JoinHandle<()> {
     })
 }
 
+#[cfg(unix)]
 fn spawn_uds_input_handler(
     uds_tx: Sender<UserInput>,
     server_tx: Arc<UnixDatagram>,

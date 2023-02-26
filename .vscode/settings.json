@@ -1,0 +1,15 @@
+{
+	"[rust]": {
+		"editor.formatOnSave": false
+	},
+	"emeraldwalk.runonsave": {
+		"autoClearConsole": true,
+		"commands": [{
+			"match": "\\.rs$",
+			// don't depend on rust-analyzer, as it sometimes causes problems with saving
+			// if the project is has not analyzed the entire project (which may take 2-3 minutes)
+			// see https://github.com/rust-lang/rust-analyzer/issues/4054
+			"cmd": "cd ${fileDirname} && cargo fmt"
+		}]
+	}
+}
